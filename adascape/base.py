@@ -7,7 +7,7 @@ import scipy.stats as stats
 import scipy.spatial as spatial
 import scipy.spatial.distance as dist
 from scipy.cluster.vq import kmeans2
-
+from .numba_funcs import _compute_taxon_ids_numba, _spectral_clustering_numba, _points_in_polygon
 
 class SpeciationModelBase:
     """
@@ -16,7 +16,7 @@ class SpeciationModelBase:
     """
 
     def __init__(self, grid_x, grid_y, init_trait_funcs, opt_trait_funcs, init_abundance,
-                 random_seed=None, always_direct_parent=True,
+                 random_seed=None, always_direct_parent=True, numba_funcs=False,
                  on_extinction='warn', taxon_threshold=0.05, taxon_def='traits', rho=0):
         """
         Initialization of based model.
@@ -71,6 +71,8 @@ class SpeciationModelBase:
                     .format(on_extinction, valid_on_extinction)
             )
 
+        self._grid_x = grid_x
+        self._grid_y = grid_y
         grid_x = np.asarray(grid_x)
         grid_y = np.asarray(grid_y)
         self._grid_bounds = {'x': np.array([grid_x.min(), grid_x.max()]),
@@ -94,7 +96,7 @@ class SpeciationModelBase:
         }
         self._env_field_bounds = None
         self._set_direct_parent = True
-
+        self._numba_funcs = numba_funcs
         # dict of callables to generate initial values for each trait
         self._init_trait_funcs = init_trait_funcs
         # dict of callables to compute optimal values for each trait
@@ -145,9 +147,15 @@ class SpeciationModelBase:
         init_traits = np.column_stack(
             [func(self._init_abundance) for func in self._init_trait_funcs.values()]
         )
-
-        clus = self._spect_clus(init_traits,
+        if self._numba_funcs:
+            clus = _spectral_clustering_numba(init_traits, 
+                                              taxon_threshold=self._params['taxon_threshold'],
+                                              random_seed = self._params['random_seed'])
+        else:
+            clus = self._spect_clus(init_traits,
                                 taxon_threshold=self._params['taxon_threshold'])
+        '''clus = self._spect_clus(init_traits,
+                                taxon_threshold=self._params['taxon_threshold'])'''
         taxon_id = clus + 1
         ancestor_id = clus.copy()
 
@@ -398,15 +406,25 @@ class SpeciationModelBase:
         new_y = self._truncnorm.rvs(*(delta_bounds_y / sigma), loc=y, scale=sigma)
 
         if disp_boundary is not None:
-            hull = spatial.Delaunay(disp_boundary)
-            inhull = hull.find_simplex(np.column_stack([new_x, new_y])) < 0
-
-            while any(inhull):
-                delta_bounds_x = self._grid_bounds['x'][:, None] - x[inhull]
-                delta_bounds_y = self._grid_bounds['y'][:, None] - y[inhull]
-                new_x[inhull] = self._truncnorm.rvs(*(delta_bounds_x / sigma), loc=x[inhull], scale=sigma)
-                new_y[inhull] = self._truncnorm.rvs(*(delta_bounds_y / sigma), loc=y[inhull], scale=sigma)
+            if self._numba_funcs:
+                inhull = _points_in_polygon(np.column_stack([new_x, new_y]), disp_boundary)
+                
+                while not np.all(inhull):
+                    delta_bounds_x = self._grid_bounds['x'][:, None] - x[~inhull]
+                    delta_bounds_y = self._grid_bounds['y'][:, None] - y[~inhull]
+                    new_x[~inhull] = self._truncnorm.rvs(*(delta_bounds_x / sigma), loc=x[~inhull], scale=sigma)
+                    new_y[~inhull] = self._truncnorm.rvs(*(delta_bounds_y / sigma), loc=y[~inhull], scale=sigma)
+                    inhull = _points_in_polygon(np.column_stack([new_x, new_y]), disp_boundary)
+            else:
+                hull = spatial.Delaunay(disp_boundary)
                 inhull = hull.find_simplex(np.column_stack([new_x, new_y])) < 0
+
+                while any(inhull):
+                    delta_bounds_x = self._grid_bounds['x'][:, None] - x[inhull]
+                    delta_bounds_y = self._grid_bounds['y'][:, None] - y[inhull]
+                    new_x[inhull] = self._truncnorm.rvs(*(delta_bounds_x / sigma), loc=x[inhull], scale=sigma)
+                    new_y[inhull] = self._truncnorm.rvs(*(delta_bounds_y / sigma), loc=y[inhull], scale=sigma)
+                    inhull = hull.find_simplex(np.column_stack([new_x, new_y])) < 0
         return new_x, new_y
 
     def _mutate_trait(self, trait, sigma):
@@ -490,7 +508,7 @@ class IR12SpeciationModel(SpeciationModelBase):
     """
 
     def __init__(self, grid_x, grid_y, init_trait_funcs, opt_trait_funcs, init_abundance,
-                 random_seed=None, always_direct_parent=True,
+                 random_seed=None, always_direct_parent=True, numba_funcs=False,
                  on_extinction='warn', taxon_threshold=0.05, sigma_u=1.0,
                  r=500., K=1000., sigma_f=0.3, sigma_d=5.,
                  sigma_m=0.05, p_m=0.05, taxon_def='traits', rho=0):
@@ -525,7 +543,7 @@ class IR12SpeciationModel(SpeciationModelBase):
                          on_extinction=on_extinction,
                          taxon_threshold=taxon_threshold,
                          taxon_def=taxon_def,
-                         rho=rho)
+                         rho=rho, numba_funcs=numba_funcs)
 
         # default parameter values
         self._params.update({
@@ -672,7 +690,25 @@ class IR12SpeciationModel(SpeciationModelBase):
         if not n_offspring.sum():
             taxon_id, ancestor_id = np.array([]), np.array([])
         else:
-            taxon_id, ancestor_id = self._compute_taxon_ids()
+            if self._numba_funcs:
+                if self._set_direct_parent:
+                    new_id_key = 'taxon_id'
+                else:
+                    new_id_key = 'ancestor_id'
+                current_ancestor_id = np.repeat(self._individuals[new_id_key], 
+                                                self._individuals['n_offspring'].astype('int'))
+                
+                taxon_id, ancestor_id = _compute_taxon_ids_numba(
+                    current_ancestor_id,
+                    self._individuals['trait'],
+                    self._individuals['taxon_id'],
+                    taxon_threshold=self._params['taxon_threshold'],
+                    random_seed=self._params['random_seed']
+                )
+               
+            else:
+                taxon_id, ancestor_id = self._compute_taxon_ids()
+            '''taxon_id, ancestor_id = self._compute_taxon_ids()'''
         self._individuals.update({'taxon_id': taxon_id})
         self._individuals.update({'ancestor_id': ancestor_id})
 

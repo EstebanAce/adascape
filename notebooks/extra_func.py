@@ -14,9 +14,9 @@ from adascape.fastscape_ext import FastscapeElevationTrait
 
 
 def single_model_run(environment, x, y, num_gen=500, init_abundance=10, dt=1e0,
-                     p_m=0.005, sigma_m=0.05, sigma_f=0.2,
+                     p_m=0.005, sigma_m=0.05, sigma_f=0.2, always_direct_parent=True,
                      sigma_d=30, sigma_u=1.0, r=50, K=50,
-                     random_seed=1234, taxon_threshold=0.075):
+                     random_seed=1234, taxon_threshold=0.075, numba_funcs=False):
     """
     Function to execute a single run of the speciation model.
 
@@ -35,16 +35,16 @@ def single_model_run(environment, x, y, num_gen=500, init_abundance=10, dt=1e0,
     dt: float
         time step of the simulation
     sigma_f: float
-                       environmental fitness variability controlling
-                       the selection width around optimal trait value.
+             environmental fitness variability controlling
+             the selection width around the optimal trait value.
     p_m: float
-              probability that a given ofspring will mutate or keep its ancestor trait value.
+              probability that a given offspring will mutate or keep its ancestor trait value.
     sigma_m: float
                trait variability of mutated offspring.
     sigma_d: float
-               dispersal variability of offspring in meters
+             dispersal variability of offspring in meters
     sigma_u: float
-                      competition variability based on trait among individuals
+             competition variability based on the trait among individuals
     r: int or float
                Radius of the local neighbourhood centred at each individual.
     K: int
@@ -53,6 +53,8 @@ def single_model_run(environment, x, y, num_gen=500, init_abundance=10, dt=1e0,
                  seed of the random number generator
     taxon_threshold: float
             threshold value to split a group of organisms into two taxon clusters
+    numba_funcs: bool, optional
+            If True, use numba-compatible functions to compute the taxon IDs. 
 
     Returns
     -------
@@ -60,11 +62,11 @@ def single_model_run(environment, x, y, num_gen=500, init_abundance=10, dt=1e0,
     taxon_id, ancestor_id, n_offspring, fitness, n_eff, n_all, trait_#
     """
 
-    # we initialize one trait that we will assume is associated with elevation
+    # We initialise one trait that we will assume is associated with elevation
     # where the initial min/max provides the range of trait values that the individual will have.
     # The parameter lin_slope determines the linear relationship between the environmental field
     # and the optimal trait value for each individual on that field.
-    # The parameter *norm_min* and *norm_max* is the minimum and maximum values of the environmental field.
+    # The parameters *norm_min* and *norm_max* are the minimum and maximum values of the environmental field.
     trait = FastscapeElevationTrait(topo_elevation=environment,
                                     init_trait_min=0.5,
                                     init_trait_max=0.5,
@@ -72,7 +74,7 @@ def single_model_run(environment, x, y, num_gen=500, init_abundance=10, dt=1e0,
                                     norm_min=environment.min(),
                                     norm_max=environment.max(),
                                     random_seed=1234)
-    # initialization of traits
+    # initialisation of traits
     trait.initialize()
 
     # dict of callables to generate initial values for each trait
@@ -88,12 +90,12 @@ def single_model_run(environment, x, y, num_gen=500, init_abundance=10, dt=1e0,
     # define a speciation model using the specified parameter values
     model = IR12SpeciationModel(grid_x=x, grid_y=y, init_trait_funcs=init_trait_funcs,
                                 opt_trait_funcs=opt_trait_funcs, init_abundance=init_abundance,
-                                r=r, K=K, taxon_threshold=taxon_threshold,
+                                r=r, K=K, taxon_threshold=taxon_threshold, always_direct_parent=always_direct_parent,
                                 sigma_f=sigma_f, sigma_u=sigma_u,
                                 sigma_d=sigma_d, sigma_m=sigma_m, p_m=p_m,
-                                random_seed=random_seed)
+                                random_seed=random_seed, numba_funcs=numba_funcs)
     print(model)
-    # initialize the speciation model
+    # initialise the speciation model
     model.initialize()
     # run the speciation model for the number of generations
     dfs = []

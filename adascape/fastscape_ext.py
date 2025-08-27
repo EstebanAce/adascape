@@ -1,3 +1,4 @@
+import pdb
 from fastscape.models import basic_model
 from fastscape.processes import SurfaceTopography, UniformRectilinearGrid2D
 import numpy as np
@@ -17,30 +18,12 @@ class Speciation:
     opt_trait_funcs = xs.group_dict("opt_trait_funcs")
     init_abundance = xs.variable(description="initial number of individuals", static=True)
     random_seed = xs.variable(default=None, description="random number generator seed", static=True)
-    taxon_threshold = xs.variable(default=0.05, description="threshold value used in our taxon definition algorithm "
-                                                            "to split a group of individuals into two taxon clusters")
-    taxon_def = xs.variable(default='traits', description="Taxon definition based on common ancestry and traits ("
-                                                          "'traits') or common ancestry, traits and location ("
-                                                          "'traits_location')")
+    
     init_x_range_min = xs.variable(default=None, description="min range of individuals on x coordinate", static=True)
     init_x_range_max = xs.variable(default=None, description="max range of individuals on x coordinate", static=True)
     init_y_range_min = xs.variable(default=None, description="min range of individuals on y coordinate", static=True)
     init_y_range_max = xs.variable(default=None, description="max range of individuals on y coordinate", static=True)
-    rho = xs.variable(default=0, description="Correlation coefficient between traits, 0 means that traits are "
-                                             "independent, where a value of rho different from 0 and "
-                                             "between -1 and 1, will determine the degree of correlation between "
-                                             "traits for all individuals")
-    sigma_u = xs.variable(default=1, description="trait-mediated competition for a limiting resource, "
-                                                 "where the degree of trait similarity is given by "
-                                                 "this parameter. If its value is =>1 all individuals "
-                                                 "in the local neighbourhood are counted, but if its "
-                                                 "values is < 1 then only those individuals with "
-                                                 "similar trait values are counted.")
-    sigma_f = xs.variable(description="environmental fitness selectivity or width around optimal trait "
-                                      "value for each individual's trait")
-    sigma_d = xs.variable(description="dispersal variability in meters")
-    sigma_m = xs.variable(description="trait variability of mutated offspring")
-    p_m = xs.variable(description="mutation probability")
+    
     abundance = xs.variable(intent="out", description="number of individuals")
     env_field = xs.variable(dims=(('field', "y", "x"), ("y", "x")))
 
@@ -55,33 +38,12 @@ class Speciation:
     _model = xs.any_object(description="speciation model instance")
     _individuals = xs.any_object(description="speciation model state dictionary")
 
-    x = xs.on_demand(
-        dims='ind',
-        description="individual's x-position"
-    )
-    y = xs.on_demand(
-        dims='ind',
-        description="individual's y-position"
-    )
-    traits = xs.on_demand(
-        dims=('ind', 'trait'),
-        description="individuals' trait values"
-    )
-    n_offspring = xs.on_demand(
-        dims='ind',
-        description="number of offspring"
-    )
-
-    taxon_id = xs.on_demand(
-        dims='ind',
-        description="taxon id number"
-    )
-
-    ancestor_id = xs.on_demand(
-        dims='ind',
-        description="ancestor taxa id number",
-        encoding={'fill_value': -1}
-    )
+    x = xs.on_demand(dims='ind', description="individual's x-position")
+    y = xs.on_demand(dims='ind', description="individual's y-position")
+    traits = xs.on_demand(dims=('ind', 'trait'), description="individuals' trait values")
+    n_offspring = xs.on_demand( dims='ind', description="number of offspring")
+    taxon_id = xs.on_demand(dims='ind', description="taxon id number")
+    ancestor_id = xs.on_demand(dims='ind', description="ancestor taxa id number", encoding={'fill_value': -1})
 
     @property
     def individuals(self):
@@ -119,8 +81,30 @@ class IR12Speciation(Speciation):
     """Irwin (2012) Speciation model as a fastscape extension.
     For more info, see :class:`adascape.base.IR12SpeciationModel`.
     """
+
+    sigma_u = xs.variable(default=1, description="trait-mediated competition for a limiting resource, "
+                                                 "where the degree of trait similarity is given by "
+                                                 "this parameter. If its value is =>1 all individuals "
+                                                 "in the local neighbourhood are counted, but if its "
+                                                 "values is < 1 then only those individuals with "
+                                                 "similar trait values are counted.")
+    sigma_f = xs.variable(description="environmental fitness selectivity or width around optimal trait "
+                                      "value for each individual's trait")
+    sigma_d = xs.variable(description="dispersal variability in meters")
+    sigma_m = xs.variable(description="trait variability of mutated offspring")
+    p_m = xs.variable(description="mutation probability")
     r = xs.variable(description="fixed neighborhood radius")
     K = xs.variable(description="carrying capacity within a neighborhood")
+    taxon_threshold = xs.variable(default=0.05, description="threshold value used in our taxon definition algorithm "
+                                                            "to split a group of individuals into two taxon clusters")
+    taxon_def = xs.variable(default='traits', description="Taxon definition based on common ancestry and traits ("
+                                                          "'traits') or common ancestry, traits and location ("
+                                                          "'traits_location')")
+    numba_funcs = xs.variable(default=False, description="Use Numba-accelerated functions for taxon ID computation")
+    rho = xs.variable(default=0, description="Correlation coefficient between traits, 0 means that traits are "
+                                             "independent, where a value of rho different from 0 and "
+                                             "between -1 and 1, will determine the degree of correlation between "
+                                             "traits for all individuals")
 
     fitness = xs.on_demand(
         dims='ind',
@@ -134,10 +118,13 @@ class IR12Speciation(Speciation):
             "sigma_d": self.sigma_d,
             "sigma_m": self.sigma_m,
             "sigma_f": self.sigma_f,
+            "p_m": self.p_m,
             "random_seed": self.random_seed,
             "taxon_threshold": self.taxon_threshold,
             "rho": self.rho,
-            "sigma_u": self.sigma_u
+            "sigma_u": self.sigma_u,
+            "numba_funcs": self.numba_funcs,
+            "taxon_def": self.taxon_def,
         }
 
     def initialize(self):
