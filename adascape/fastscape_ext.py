@@ -4,7 +4,7 @@ import numpy as np
 import xsimlab as xs
 from adascape.base import IR12SpeciationModel
 from orographic_precipitation.fastscape_ext import OrographicPrecipitation, OrographicDrainageDischarge
-
+from scipy.spatial import ConvexHull
 
 @xs.process
 class Speciation:
@@ -47,11 +47,10 @@ class Speciation:
     grid_x = xs.foreign(UniformRectilinearGrid2D, "x")
     grid_y = xs.foreign(UniformRectilinearGrid2D, "y")
 
-    disp_boundary = xs.variable(default=None, description="dispersal boundaries as an xr.DataArray "
-                                                          "with vertices [[x,y],...] of bounded area "
-                                                          "with dimensions p and d",
-                                static=True, dims=[(), ('p', 'd')])
-
+    disp_boundary = xs.variable(default=None, description="dispersal boundary value to define minimum elevation of the island," \
+                                                          " where individuals can disperse. Default None, no boundary is applied.",
+                                static=True)
+    
     _model = xs.any_object(description="speciation model instance")
     _individuals = xs.any_object(description="speciation model state dictionary")
 
@@ -127,6 +126,8 @@ class IR12Speciation(Speciation):
         description="individual's fitness value"
     )
 
+    topo_elevation = xs.foreign(SurfaceTopography, "elevation")
+
     def _get_model_params(self):
         return {
             "r": self.r,
@@ -173,9 +174,20 @@ class IR12Speciation(Speciation):
         self.abundance = self._model.abundance
         self._model.evaluate_fitness()
 
+    def _island_boundary(self):
+        xx, yy = np.meshgrid(self.grid_x, self.grid_y)
+        island_mask = self.topo_elevation > self.disp_boundary
+        island_grid = np.column_stack((xx[island_mask], yy[island_mask]))
+        cvhull = ConvexHull(island_grid)
+        return island_grid[cvhull.vertices]
+
     @xs.runtime(args='step_delta')
     def finalize_step(self, dt):
-        self._model.update_individuals(dt, self.disp_boundary)
+        if self.disp_boundary is not None:
+            boundary_points = self._island_boundary()
+            self._model.update_individuals(dt, boundary_points)
+        else:
+            self._model.update_individuals(dt, self.disp_boundary)
 
     @fitness.compute
     def _get_fitness(self):
