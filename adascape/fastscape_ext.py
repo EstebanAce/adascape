@@ -187,7 +187,7 @@ class IR12Speciation(Speciation):
             boundary_points = self._island_boundary()
             self._model.update_individuals(dt, boundary_points)
         else:
-            self._model.update_individuals(dt, self.disp_boundary)
+            self._model.update_individuals(dt)
 
     @fitness.compute
     def _get_fitness(self):
