@@ -32,6 +32,7 @@ def specIR12_process(trait_funcs):
     return IR12Speciation(env_field=env_field, grid_x=x, grid_y=y,
                           init_trait_funcs=init_trait_funcs,
                           opt_trait_funcs=opt_trait_funcs,
+                          topo_elevation=env_field,
                           **params)
 
 
