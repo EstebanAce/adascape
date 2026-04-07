@@ -11,12 +11,12 @@ in Python that is coupled with the landscape evolution model [FastScape](https:/
 
 ## Install
 
-This package depends on Python (3.9 or later is recommended),
-[numpy](http://www.numpy.org/),
+This package depends on Python (3.9 to 3.11 is recommended),
+[numpy<=1.23](http://www.numpy.org/),
 [scipy](https://docs.scipy.org/doc/scipy/reference/),
 [pandas](https://pandas.pydata.org/),
 [fastscape](https://github.com/fastscape-lem/fastscape) and 
-[orographic precipitation](https://github.com/fastscape-lem/orographic-precipitation) .
+[orographic precipitation](https://github.com/fastscape-lem/orographic-precipitation).
 
 This package also provides a [dendropy](https://dendropy.org/) extension and 
 uses [toytree](https://toytree.readthedocs.io/en/latest/index.html) 
@@ -43,10 +43,18 @@ command instead:
 $ pip install -e .
 ```
 
+An environment file ``environment.yml`` is also provided with all dependencies to create using this file:
+
+``` shell
+$ mamba env create -f environment.yml
+$ mamba activate adascape_dev
+```
+
 ## Usage
 
-Some examples are shown in the ``notebooks`` folder (Jupyter Notebooks).
+Some examples are shown in the `notebooks`_ folder (Jupyter Notebooks).
 
+.. _`notebooks`: https://github.com/fastscape-lem/adascape/tree/master/notebooks
 ## Tests
 
 To run the tests, you need to have
