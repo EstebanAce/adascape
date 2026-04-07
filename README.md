@@ -11,8 +11,8 @@ in Python that is coupled with the landscape evolution model [FastScape](https:/
 
 ## Install
 
-This package depends on Python (3.9 to 3.11 is recommended),
-[numpy<=1.23](http://www.numpy.org/),
+This package depends on Python (>=3.11 is recommended),
+[numpy<2](http://www.numpy.org/),
 [scipy](https://docs.scipy.org/doc/scipy/reference/),
 [pandas](https://pandas.pydata.org/),
 [fastscape](https://github.com/fastscape-lem/fastscape) and 
@@ -43,7 +43,7 @@ command instead:
 $ pip install -e .
 ```
 
-An environment file ``environment.yml`` is also provided with all dependencies to create using this file:
+An environment file ``environment.yml`` with all dependencies is also provided. To create an conda/mamba environment using this file:
 
 ``` shell
 $ mamba env create -f environment.yml
@@ -52,9 +52,8 @@ $ mamba activate adascape_dev
 
 ## Usage
 
-Some examples are shown in the `notebooks`_ folder (Jupyter Notebooks).
+Some examples are shown in the [notebooks](https://github.com/fastscape-lem/adascape/tree/master/notebooks) folder (Jupyter Notebooks).
 
-.. _`notebooks`: https://github.com/fastscape-lem/adascape/tree/master/notebooks
 ## Tests
 
 To run the tests, you need to have
